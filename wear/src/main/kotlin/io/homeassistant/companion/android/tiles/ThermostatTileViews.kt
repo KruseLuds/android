@@ -38,10 +38,13 @@ private const val CLASSIC_CONTROL_GAP_DP = 10f
 private const val CLASSIC_NAME_ARC_DP = 30f
 private const val CLASSIC_POWER_GAP_DP = 6f
 private const val CLASSIC_TARGET_TEXT_SP = 30f
+private const val AUTO_CURRENT_TEXT_SP = 26f
 private const val COMPACT_ACTIVITY_TEXT_SP = 10f
+private const val COMPACT_AUTO_CURRENT_TEXT_SP = 24f
 private const val COMPACT_CONTROL_GAP_DP = 4f
 private const val COMPACT_CURRENT_TEXT_SP = 27f
 private const val COMPACT_NAME_TEXT_SP = 12f
+private const val COMPACT_RANGE_BOTTOM_CLEARANCE_DP = 8f
 private const val CONTROL_GAP_DP = 5f
 private const val CONTROL_SECTION_GAP_DP = 5f
 private const val CURRENT_TEXT_SP = 30f
@@ -51,6 +54,7 @@ private const val FULL_CIRCLE_DEGREES = 360f
 private const val LONG_LABEL_TEXT_SP = 10f
 private const val LONG_LABEL_THRESHOLD = 4
 private const val NAME_TEXT_SP = 13f
+private const val RANGE_BOTTOM_CLEARANCE_DP = 12f
 private const val ROW_GAP_DP = 3f
 private const val SETPOINT_TEXT_SP = 16f
 private const val TOP_ARC_ANCHOR_DEGREES = 180f
@@ -334,7 +338,7 @@ internal class ThermostatTileViews(private val context: Context) {
         column.addContent(
             temperatureText(
                 units.enhancedText(current),
-                if (compact) COMPACT_CURRENT_TEXT_SP else CURRENT_TEXT_SP,
+                enhancedCurrentTextSize(state, compact),
                 0xFFFFFFFF.toInt(),
             ),
         )
@@ -342,6 +346,7 @@ internal class ThermostatTileViews(private val context: Context) {
         column.addContent(verticalGap(if (compact) 2f else ROW_GAP_DP))
         addSetpoints(column, layout, range)
         addControlRows(column, layout, controls)
+        addRangeBottomClearance(column, range, compact)
 
         return Timeline.fromLayoutElement(
             LayoutElementBuilders.Box.Builder()
@@ -359,6 +364,23 @@ internal class ThermostatTileViews(private val context: Context) {
                 }
                 .build(),
         )
+    }
+
+    private fun enhancedCurrentTextSize(state: String, compact: Boolean): Float = when (state) {
+        "heat_cool", "auto" -> if (compact) COMPACT_AUTO_CURRENT_TEXT_SP else AUTO_CURRENT_TEXT_SP
+        else -> if (compact) COMPACT_CURRENT_TEXT_SP else CURRENT_TEXT_SP
+    }
+
+    private fun addRangeBottomClearance(
+        column: LayoutElementBuilders.Column.Builder,
+        range: Boolean,
+        compact: Boolean,
+    ) {
+        if (range) {
+            // Reserve clearance from the lower round-screen edge without shrinking touch targets.
+            val clearance = if (compact) COMPACT_RANGE_BOTTOM_CLEARANCE_DP else RANGE_BOTTOM_CLEARANCE_DP
+            column.addContent(verticalGap(clearance))
+        }
     }
 
     private fun addControlRows(
@@ -419,7 +441,6 @@ internal class ThermostatTileViews(private val context: Context) {
         val compact = layout.compact
         val pending = layout.pending
         val state = layout.entity.rawState
-        val active = state !in listOf("off", "unavailable", "unknown")
         val hvacAction = layout.entity.climateControls?.hvacAction?.takeIf { it.isNotBlank() } ?: "idle"
         if (config.showActivity || pending != null) {
             val displayState = stateLabel(
@@ -439,7 +460,7 @@ internal class ThermostatTileViews(private val context: Context) {
                 ThermostatCommandCoordinator.Pending.Status.FAILED -> context.getString(
                     commonR.string.thermostat_tile_unconfirmed,
                 )
-                null -> if (active) {
+                null -> if (showHvacAction(state, hvacAction)) {
                     context.getString(
                         commonR.string.thermostat_tile_activity_summary,
                         displayState,
@@ -458,6 +479,12 @@ internal class ThermostatTileViews(private val context: Context) {
                 temperatureText(activity, if (compact) COMPACT_ACTIVITY_TEXT_SP else ACTIVITY_TEXT_SP, activityColor),
             )
         }
+    }
+
+    private fun showHvacAction(state: String, hvacAction: String): Boolean = when (state) {
+        "off" -> hvacAction == "fan" || hvacAction == "fan_only"
+        "unavailable", "unknown" -> false
+        else -> true
     }
 
     private fun activityModeColor(state: String): Int = when (state) {

@@ -33,7 +33,12 @@ class ThermostatTileViewsTest {
     private val prefix = ThermostatCommandCoordinator.Target(1, "climate.living_room").actionPrefix
     private val config = ThermostatTile(id = 10, entityId = "climate.living_room", showPowerButton = true)
 
-    private fun thermostat(state: String = "heat", supportsPower: Boolean = true) = EntityDisplayWithoutContext(
+    private fun thermostat(
+        state: String = "heat",
+        supportsPower: Boolean = true,
+        hvacAction: String = if (state == "heat") "heating" else "idle",
+        fanMode: String = "auto",
+    ) = EntityDisplayWithoutContext(
         entityId = "climate.living_room",
         name = "Living Room",
         icon = mockk(),
@@ -42,7 +47,7 @@ class ThermostatTileViewsTest {
             currentTemperature = 19.4f,
             targetTemperature = 19.5f,
             targetTemperatureStep = 0.5f,
-            hvacAction = if (state == "heat") "heating" else "idle",
+            hvacAction = hvacAction,
             minTemperature = 5f,
             maxTemperature = 30f,
             temperatureUnit = "°C",
@@ -51,7 +56,7 @@ class ThermostatTileViewsTest {
             targetTemperatureLow = 18f,
             targetTemperatureHigh = 22f,
             supportsTargetTemperatureRange = true,
-            fanMode = "auto",
+            fanMode = fanMode,
             fanModes = listOf("auto", "on"),
             supportsTurnOn = supportsPower,
             supportsTurnOff = supportsPower,
@@ -117,6 +122,31 @@ class ThermostatTileViewsTest {
         val defaultTexts = views.enhancedTimeline(config, thermostat(), "°C", null, prefix, 240, 240)
             .elements().filterIsInstance<Text>().mapNotNull { it.text?.value }
         assertTrue("19.4° C" in defaultTexts)
+    }
+
+    @Test
+    fun `enhanced shows actual fan activity even when HVAC is off`() {
+        fun texts(action: String, fanMode: String) = views.enhancedTimeline(
+            config.copy(layoutStyle = "enhanced"),
+            thermostat("off", hvacAction = action, fanMode = fanMode),
+            "°C",
+            null,
+            prefix,
+            240,
+            240,
+        ).elements().filterIsInstance<Text>().mapNotNull { it.text?.value }
+        val off = context.getString(commonR.string.state_off).uppercase(java.util.Locale.getDefault())
+        val fanOnly = context.getString(
+            commonR.string.thermostat_tile_activity_summary,
+            off,
+            context.getString(commonR.string.state_fan_only),
+        )
+        assertTrue(fanOnly in texts("fan", "on"))
+        assertTrue(fanOnly in texts("fan", "auto"))
+        assertTrue(fanOnly in texts("fan_only", "on"))
+        assertTrue(off in texts("idle", "on"))
+        assertFalse(fanOnly in texts("idle", "on"))
+        assertTrue(off in texts("off", "auto"))
     }
 
     @Test
